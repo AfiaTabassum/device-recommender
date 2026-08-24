@@ -13,6 +13,11 @@ for key in ["ZILLIZ_URI", "ZILLIZ_TOKEN", "GROQ_API_KEY", "OPENROUTER_API_KEY", 
 
 import agent  # noqa: E402  (must come after env injection)
 
+# ── Re-trigger Milvus init now that credentials are in os.environ ──
+import laptop_SP_search_tools as _lst  # noqa: E402
+if not _lst._milvus_ok:
+    _lst._init_milvus()
+
 # ═══════════════════════════════════════════════════════════════
 # PAGE CONFIG
 # ═══════════════════════════════════════════════════════════════

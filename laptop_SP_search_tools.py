@@ -42,8 +42,10 @@ load_dotenv()
 # ============================================================
 
 # ── Zilliz Cloud credentials ──────────────────────────────────
-ZILLIZ_URI   = os.environ["ZILLIZ_URI"]
-ZILLIZ_TOKEN = os.environ["ZILLIZ_TOKEN"]
+# Read lazily inside _init_milvus() so Streamlit secrets injected
+# by App.py (os.environ[key] = st.secrets[key]) are available first.
+ZILLIZ_URI   = None
+ZILLIZ_TOKEN = None
 
 # ── ★ SELECT YOUR INDEX HERE after benchmarking ★ ─────────────
 # Replace with the winning collection name from your benchmark results.
@@ -105,13 +107,23 @@ def _init_milvus() -> None:
     global _client, _embed_model, _bm25_ef, _dense_params, _milvus_ok
 
     try:
+        import traceback
         from pymilvus import MilvusClient
         from sentence_transformers import SentenceTransformer
         from pymilvus.model.sparse import BM25EmbeddingFunction
         from pymilvus.model.sparse.bm25.tokenizers import build_default_analyzer
 
+        # ── Read credentials at call time (after Streamlit secrets injection) ──
+        zilliz_uri   = os.environ.get("ZILLIZ_URI")
+        zilliz_token = os.environ.get("ZILLIZ_TOKEN")
+        if not zilliz_uri or not zilliz_token:
+            raise RuntimeError(
+                "ZILLIZ_URI or ZILLIZ_TOKEN is missing from environment. "
+                "Add them to Streamlit secrets or your .env file."
+            )
+
         # ── Connect via MilvusClient (no ORM connections.connect) ──
-        _client = MilvusClient(uri=ZILLIZ_URI, token=ZILLIZ_TOKEN)
+        _client = MilvusClient(uri=zilliz_uri, token=zilliz_token)
         print(f"[milvus_tools] Connected to Zilliz: {ZILLIZ_URI}")
 
         # ── Server version via MilvusClient ───────────────────────
@@ -162,7 +174,10 @@ def _init_milvus() -> None:
         print(f"[milvus_tools] ✅ Init complete. Active index: {INDEX_NAME}")
 
     except Exception as exc:
-        print(f"[milvus_tools] WARNING: Init failed — all Milvus tools disabled.\n  Error: {exc}")
+        import traceback
+        print(f"[milvus_tools] WARNING: Init failed — all Milvus tools disabled.")
+        print(f"  Error: {exc}")
+        print(traceback.format_exc())
         _milvus_ok = False
 
 
