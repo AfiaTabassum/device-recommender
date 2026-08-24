@@ -265,7 +265,7 @@ def LS_research_agent(
     #nothing now   # mirrors system prompt cap
     tool_call_count = 0
 
-    for round_num in range(10):
+    for round_num in range(8):
 
         safe_messages = _truncate_tool_results(messages, max_chars=2000)
 

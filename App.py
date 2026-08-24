@@ -1,6 +1,7 @@
 """
-app.py — Fixed tabbed chatbot interface 
-for the Laptop/Smartphone Recommender Agent.
+app.py — Tabbed workflow engine interface.
+Eliminates all sidebar buttons/toggles; tool calls and tool results 
+are persistently isolated and displayed inside the secondary tab.
 """
 
 import os
@@ -32,7 +33,7 @@ if not _lst._milvus_ok:
 # PAGE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Device Recommender",
+    page_title="Hardware Procurement Engine",
     page_icon="💻",
     layout="wide",
 )
@@ -45,7 +46,7 @@ MODELS = {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# SESSION STATE MANAGEMENT
+# STATE RETENTION PERSISTENCE
 # ═══════════════════════════════════════════════════════════════
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -55,140 +56,120 @@ if "captured_logs" not in st.session_state:
     st.session_state.captured_logs = []
 
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR CONTROL PANEL
+# SIDEBAR RE-INDEX UTILITY CONTROL
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.title("⚙️ Engine Control")
+    st.title("⚙️ Engine Architecture")
     st.markdown("---")
 
     selected_label = st.selectbox(
-        "🤖 Processing Model",
+        "🤖 Processing Intelligence Model",
         options=list(MODELS.keys()),
         index=0,
     )
     selected_model = MODELS[selected_label]
 
     st.markdown("---")
-    st.markdown("**🔍 Debug View Filters**")
-
-    # Linked toggles that directly show/hide specific log frames live
-    show_thinking = st.toggle(
-        "Show tool calls",
-        value=True,
-        help="Display which search tool the agent called and with what arguments.",
-    )
-    show_tool_results = st.toggle(
-        "Show tool results",
-        value=True,
-        help="Display the raw database records returned by each tool call.",
-    )
-
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
+    if st.button("🗑️ Clear Cache & Logs", use_container_width=True):
         st.session_state.messages = []
         st.session_state.current_response = None
         st.session_state.captured_logs = []
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# APPLICATION MONKEY-PATCH FOR UTILS DISPLAY INTERCEPTION
+# CRITICAL FIX: STATIC DELEGATED INTERCEPTION CHANNELS
 # ═══════════════════════════════════════════════════════════════
-class HTMLCaptureObject:
-    def __init__(self, data_str):
-        self.data_str = data_str
+class HTMLCaptureFrame:
+    def __init__(self, raw_html_string):
+        self.raw_html_string = raw_html_string
 
-def streamlit_html_interceptor(obj):
-    """Intercepts IPython display calls and pipes HTML strings to session state."""
-    if hasattr(obj, 'data_str'):
-        st.session_state.captured_logs.append(obj.data_str)
-    elif isinstance(obj, str):
-        st.session_state.captured_logs.append(obj)
+def stream_interceptor_sink(target_object):
+    """Intercepts utility HTML payloads and routes them sequentially into global state storage."""
+    if hasattr(target_object, 'raw_html_string'):
+        st.session_state.captured_logs.append(target_object.raw_html_string)
+    elif isinstance(target_object, str):
+        st.session_state.captured_logs.append(target_object)
 
-# Force overwrite original utils functions to pipeline strings into active memory
-_utils.display = lambda x: streamlit_html_interceptor(x)
-_utils.HTML = lambda x: HTMLCaptureObject(x)
+# Bind interception pipes directly before user execution loops fire
+_utils.display = lambda wrapper_obj: stream_interceptor_sink(wrapper_obj)
+_utils.HTML = lambda structural_str: HTMLCaptureFrame(structural_str)
+
+# Map core function pointer names to our safe state wrappers
+_utils.log_tool_call_html = lambda name, args: stream_interceptor_sink(
+    f"<div style='border-left:4px solid #1976D2;padding:.8em;margin:1em 0;background-color:#e3f2fd;color:#0D47A1;font-family:sans-serif;'><strong>🔧 Tool Call:</strong> <code>{name}</code><pre style='background:#f4f4f4;padding:8px;border-radius:4px;'>{args}</pre></div>"
+)
+_utils.log_tool_result_html = lambda result: stream_interceptor_sink(
+    f"<div style='border-left:4px solid #558B2F;padding:.8em;margin:1em 0;background-color:#f1f8e9;color:#33691E;'><strong>✅ Tool Result:</strong><pre style='white-space:pre-wrap;font-size:13px;color:#2E7D32;'>{result}</pre></div>"
+)
 
 # ═══════════════════════════════════════════════════════════════
-# MAIN INTERFACE WORKSPACE
+# DASHBOARD INPUT INTERFACE
 # ═══════════════════════════════════════════════════════════════
-st.title("💻📱 Laptop & Smartphone Recommender Dashboard")
-st.markdown("Submit your hardware specifications requirement below to generate recommendations.")
+st.title("💻📱 Laptop & Smartphone Recommender")
+st.markdown("Input your technical deployment specifications below to compile tailored hardware reports.")
 st.markdown("---")
 
-# Render past chat history in chat boxes
+# Render historical messaging chains
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # ═══════════════════════════════════════════════════════════════
-# CHAT INPUT PIPELINE EXECUTION BOUNDARY
+# AGENT INTERACTIVE RUN BOUNDARY
 # ═══════════════════════════════════════════════════════════════
 if prompt := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with RTX 4060'"):
     
-    # Save the user query message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # Reset internal tracking variables for a clean run
     st.session_state.captured_logs = []
     st.session_state.current_response = None
     
-    # Render user prompt immediately to prevent interface hanging
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Trigger Agentic Loop Execution
     with st.chat_message("assistant"):
-        with st.spinner("⏳ *Searching the database and compiling recommendations...*"):
+        with st.spinner("⏳ *Executing multi-turn agent pipeline and vector table search...*"):
             try:
-                # Core function execution
+                # Fire core agent logic loop directly
                 answer = agent.LS_research_agent(
                     user_question=prompt,
                     model=selected_model,
                     verbose=True,
-                    show_thinking=True,       # Force agent logging internally
-                    show_tool_results=True,   # Force agent logging internally
+                    show_thinking=True,       
+                    show_tool_results=True,   
                     show=False,
                 )
                 st.session_state.current_response = answer
                 st.session_state.messages.append({"role": "assistant", "content": answer})
-            except Exception as e:
-                error_msg = f"❌ **Execution Error encountered during runtime:** {e}"
-                st.session_state.current_response = error_msg
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
-    
+            except Exception as execution_failure:
+                err_text = f"❌ **Pipeline Execution Failure:** {execution_failure}"
+                st.session_state.current_response = err_text
+                st.session_state.messages.append({"role": "assistant", "content": err_text})
+                
     st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# OUTPUT TAB COMPONENT ROUTER
+# PERSISTENT TABS DISPATCH MATRICES
 # ═══════════════════════════════════════════════════════════════
 if st.session_state.current_response is not None:
     st.markdown("---")
     
-    # Build structural presentation tabs
+    # Structural layout separation matching your parameters
     home_tab, tools_tab = st.tabs(["🏠 Recommendation Home", "🛠️ Tool Call Records"])
     
     with home_tab:
-        st.subheader("💡 Expert Recommendations Summary")
+        st.subheader("💡 System Evaluation Output")
         st.markdown(st.session_state.current_response)
         
     with tools_tab:
-        st.subheader("📦 Under-the-Hood Agent System Logs")
-        
-        has_visible_logs = False
+        st.subheader("📦 Database Query Execution Logs")
         
         if st.session_state.captured_logs:
+            # Stream all logs sequentially without any button dependencies
             for html_payload in st.session_state.captured_logs:
-                # Isolate log types based on custom string layout classes
-                is_call = "Tool Call" in html_payload
-                is_result = "Tool Result" in html_payload
-                
-                # Check current sidebar toggle state filter matrix live
-                if (is_call and show_thinking) or (is_result and show_tool_results):
-                    has_visible_logs = True
-                    with st.container():
-                        # Auto-scale box framing heights based on payload sizing requirements
-                        box_height = 450 if is_result else 180
-                        components.html(html_payload, height=box_height, scrolling=True)
-                        
-        if not has_visible_logs:
-            st.info("No tool call logs match your current sidebar display settings filter.")
+                is_large_result = "Tool Result" in html_payload
+                with st.container():
+                    # Calculate tracking micro-frame box constraints safely
+                    frame_height = 500 if is_large_result else 200
+                    components.html(html_payload, height=frame_height, scrolling=True)
+        else:
+            st.info("No underlying vector tool transactions were captured for this instruction block.")
