@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import utils
 import laptop_SP_search_tools
 import aisuite
+from openai import OpenAI
 
 
 
@@ -263,7 +264,7 @@ def LS_research_agent(
     #nothing now   # mirrors system prompt cap
     tool_call_count = 0
 
-    for round_num in range(8):
+    for round_num in range(10):
 
         safe_messages = _truncate_tool_results(messages, max_chars=2000)
 
