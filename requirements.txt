@@ -1,0 +1,8 @@
+streamlit>=1.35.0
+pymilvus>=2.4.0
+pymilvus[model]>=2.4.0
+sentence-transformers>=2.7.0
+aisuite[groq]>=0.1.0
+openai>=1.30.0
+python-dotenv>=1.0.0
+pandas>=2.0.0
