@@ -1,7 +1,7 @@
 """
 app.py — Tabbed workflow engine interface.
-Eliminates all sidebar buttons/toggles; tool calls and tool results 
-are persistently isolated and displayed inside the secondary tab.
+All visibility toggles are removed. Tool calls and results are always fully 
+rendered inside the secondary tab using themed CSS variables.
 """
 
 import os
@@ -56,7 +56,7 @@ if "captured_logs" not in st.session_state:
     st.session_state.captured_logs = []
 
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR RE-INDEX UTILITY CONTROL
+# SIDEBAR CONTROL PANEL (No visibility toggles present)
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.title("⚙️ Engine Architecture")
@@ -77,7 +77,7 @@ with st.sidebar:
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# CRITICAL FIX: STATIC DELEGATED INTERCEPTION CHANNELS
+# STATIC DELEGATED INTERCEPTION CHANNELS (THEMED)
 # ═══════════════════════════════════════════════════════════════
 class HTMLCaptureFrame:
     def __init__(self, raw_html_string):
@@ -90,16 +90,57 @@ def stream_interceptor_sink(target_object):
     elif isinstance(target_object, str):
         st.session_state.captured_logs.append(target_object)
 
-# Bind interception pipes directly before user execution loops fire
+THEME_JS_PATCH = """
+<script>
+    function matchParentTheme() {
+        const parentStyles = window.parent.getComputedStyle(window.parent.document.body);
+        const textColor = parentStyles.getPropertyValue('--text-color') || '#111111';
+        const bgColor = parentStyles.getPropertyValue('--background-color') || '#ffffff';
+        const secondaryBg = parentStyles.getPropertyValue('--secondary-background-color') || '#f4f4f4';
+
+        document.body.style.color = textColor;
+        document.body.style.backgroundColor = 'transparent'; 
+        
+        const callBox = document.querySelector('.theme-call-box');
+        if (callBox) { callBox.style.backgroundColor = secondaryBg; callBox.style.color = textColor; }
+        
+        const resultBox = document.querySelector('.theme-result-box');
+        if (resultBox) { resultBox.style.backgroundColor = secondaryBg; resultBox.style.color = textColor; }
+
+        const preBlocks = document.querySelectorAll('pre, code');
+        preBlocks.forEach(el => {
+            el.style.background = bgColor;
+            el.style.color = textColor;
+            el.style.border = `1px solid ${secondaryBg}`;
+        });
+    }
+    window.addEventListener('DOMContentLoaded', matchParentTheme);
+    setInterval(matchParentTheme, 1000);
+</script>
+"""
+
+# Force overwrite original utils functions to pipeline strings into active memory
 _utils.display = lambda wrapper_obj: stream_interceptor_sink(wrapper_obj)
 _utils.HTML = lambda structural_str: HTMLCaptureFrame(structural_str)
 
-# Map core function pointer names to our safe state wrappers
 _utils.log_tool_call_html = lambda name, args: stream_interceptor_sink(
-    f"<div style='border-left:4px solid #1976D2;padding:.8em;margin:1em 0;background-color:#e3f2fd;color:#0D47A1;font-family:sans-serif;'><strong>🔧 Tool Call:</strong> <code>{name}</code><pre style='background:#f4f4f4;padding:8px;border-radius:4px;'>{args}</pre></div>"
+    f\"\"\"
+    <div class="theme-call-box" style="border-left: 4px solid #1976D2; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
+        <strong>🔧 Tool Call Initiated:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
+        <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{args}</pre>
+    </div>
+    {THEME_JS_PATCH}
+    \"\"\"
 )
+
 _utils.log_tool_result_html = lambda result: stream_interceptor_sink(
-    f"<div style='border-left:4px solid #558B2F;padding:.8em;margin:1em 0;background-color:#f1f8e9;color:#33691E;'><strong>✅ Tool Result:</strong><pre style='white-space:pre-wrap;font-size:13px;color:#2E7D32;'>{result}</pre></div>"
+    f\"\"\"
+    <div class="theme-result-box" style="border-left: 4px solid #558B2F; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
+        <strong>✅ Tool Execution Result:</strong>
+        <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{result}</pre>
+    </div>
+    {THEME_JS_PATCH}
+    \"\"\"
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -164,11 +205,9 @@ if st.session_state.current_response is not None:
         st.subheader("📦 Database Query Execution Logs")
         
         if st.session_state.captured_logs:
-            # Stream all logs sequentially without any button dependencies
             for html_payload in st.session_state.captured_logs:
-                is_large_result = "Tool Result" in html_payload
+                is_large_result = "Tool Execution Result" in html_payload
                 with st.container():
-                    # Calculate tracking micro-frame box constraints safely
                     frame_height = 500 if is_large_result else 200
                     components.html(html_payload, height=frame_height, scrolling=True)
         else:
