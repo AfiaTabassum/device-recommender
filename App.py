@@ -123,23 +123,23 @@ _utils.display = lambda payload_obj: pipe_html_to_state_sink(payload_obj)
 _utils.HTML = lambda base_string: CapturedHTMLWrapper(base_string)
 
 _utils.log_tool_call_html = lambda name, args: pipe_html_to_state_sink(
-    f\"\"\"
+    f"""
     <div class="theme-card-node" style="border-left: 4px solid #1976D2; padding: .9em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
         <strong>🔧 Tool Call Dispatched:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{args}</pre>
     </div>
     {THEME_MUTATION_JS}
-    \"\"\"
+    """
 )
 
 _utils.log_tool_result_html = lambda result: pipe_html_to_state_sink(
-    f\"\"\"
+    f"""
     <div class="theme-card-node" style="border-left: 4px solid #558B2F; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
         <strong>✅ Vector Database Payload Returned:</strong>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{result}</pre>
     </div>
     {THEME_MUTATION_JS}
-    \"\"\"
+    """
 )
 
 # ═══════════════════════════════════════════════════════════════
