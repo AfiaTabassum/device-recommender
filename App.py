@@ -1,9 +1,10 @@
 """
-app.py — Completely isolated execution interface.
-Removes all sidebar toggles. Tool records are forced into the secondary tab unconditionally.
+app.py — Deep-isolated tabbed interface for the Laptop/Smartphone Recommender.
+Enforces strict memory isolation to prevent the Streamlit max-rounds loop.
 """
 
 import os
+import copy  # Crucial for deep-copy isolation
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -45,7 +46,7 @@ MODELS = {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# CRITICAL STATE BOUNDARIES (Fixes the Empty Tool-Call Infinite Loop)
+# EXPLICIT SESSION STATE ISOLATION (Prevents reference retention)
 # ═══════════════════════════════════════════════════════════════
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -55,7 +56,7 @@ if "live_runtime_logs" not in st.session_state:
     st.session_state.live_runtime_logs = []
 
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR CONTROL PANEL (Cleaned, no toggle elements)
+# SIDEBAR CONTROL PANEL
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.title("⚙️ Engine Parameters")
@@ -124,7 +125,7 @@ _utils.HTML = lambda base_string: CapturedHTMLWrapper(base_string)
 
 _utils.log_tool_call_html = lambda name, args: pipe_html_to_state_sink(
     f"""
-    <div class="theme-card-node" style="border-left: 4px solid #1976D2; padding: .9em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
+    <div class="theme-card-node" style="border-left: 4px solid #1976D2; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
         <strong>🔧 Tool Call Dispatched:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{args}</pre>
     </div>
@@ -155,14 +156,13 @@ for chat_bubble in st.session_state.chat_history:
         st.markdown(chat_bubble["content"])
 
 # ═══════════════════════════════════════════════════════════════
-# HARD BOUNDARY: CLEAN ISOLATED AGENT TRIGGER LOOP
+# HARD BOUNDARY: DEEP-COPIED ISOLATED AGENT TRIGGER LOOP
 # ═══════════════════════════════════════════════════════════════
 if active_query := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with RTX 4060'"):
     
-    # Store immediate user action
     st.session_state.chat_history.append({"role": "user", "content": active_query})
     
-    # HARD RESET: Flush internal tracking states to guarantee a clean runtime frame
+    # Reset logging and execution states completely before firing
     st.session_state.live_runtime_logs = []
     st.session_state.last_computed_answer = None
     
@@ -170,12 +170,16 @@ if active_query := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with
         st.markdown(active_query)
 
     with st.chat_message("assistant"):
-        with st.spinner("⏳ *Executing isolated multi-turn agent logic blocks...*"):
+        with st.spinner("⏳ *Executing multi-turn agent logic blocks in isolated frame...*"):
             try:
-                # Force clean context parameter separation to pass to agent.py
+                # DEEP COPY the strings to ensure absolutely zero reference pollution across loops
+                clean_query_string = copy.deepcopy(str(active_query))
+                clean_model_string = copy.deepcopy(str(selected_model))
+                
+                # Execute agent with completely clean standalone parameters
                 evaluated_payload = agent.LS_research_agent(
-                    user_question=str(active_query),  # Cast explicitly to isolate string space
-                    model=str(selected_model),
+                    user_question=clean_query_string,  
+                    model=clean_model_string,
                     verbose=True,
                     show_thinking=True,       
                     show_tool_results=True,   
@@ -207,11 +211,9 @@ if st.session_state.last_computed_answer is not None:
         st.subheader("📦 Database Query Execution Logs")
         
         if st.session_state.live_runtime_logs:
-            # Sequentially loop and print logs directly to the frame without conditional toggle limits
             for explicit_html in st.session_state.live_runtime_logs:
                 is_database_row_payload = "Database Payload Returned" in explicit_html
                 with st.container():
-                    # Safely dynamically size micro-frame container constraints
                     calculated_height = 550 if is_database_row_payload else 220
                     components.html(explicit_html, height=calculated_height, scrolling=True)
         else:
