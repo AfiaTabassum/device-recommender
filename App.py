@@ -1,19 +1,18 @@
 """
-app.py — Streamlit chatbot interface for the Laptop/Smartphone Recommender Agent.
+app.py — Fixed tabbed chatbot interface 
+for the Laptop/Smartphone Recommender Agent.
 """
 
 import os
-import re
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ── Inject Streamlit secrets into environment before any other import ──
 for key in ["ZILLIZ_URI", "ZILLIZ_TOKEN", "GROQ_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"]:
     if key in st.secrets:
         os.environ[key] = st.secrets[key]
 
-# ── Patch aisuite bug: is_mcp_config not defined when MCP import fails ──────
-# Versions 0.1.10-0.1.14 have a bug where MCP_AVAILABLE=False but is_mcp_config
-# is still called on every chat completion. Inject a safe stub before use.
+# ── Patch aisuite bug safely ────────────────────────────────────────────────
 try:
     import aisuite.client as _aisuite_client
     if not getattr(_aisuite_client, "MCP_AVAILABLE", True):
@@ -21,15 +20,16 @@ try:
 except Exception:
     pass
 
-import agent  # noqa: E402  (must come after env injection)
+import agent  
+import utils as _utils  
 
 # ── Initialise Milvus now that credentials are in os.environ ──
-import laptop_SP_search_tools as _lst  # noqa: E402
+import laptop_SP_search_tools as _lst  
 if not _lst._milvus_ok:
     _lst._init_milvus()
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Device Recommender",
@@ -37,9 +37,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# ═══════════════════════════════════════════════════════════════
-# MODELS  (all models mentioned in LS_research_agent())
-# ═══════════════════════════════════════════════════════════════
 MODELS = {
     "GPT-OSS 120B  (Groq)":               "groq:openai/gpt-oss-120b",
     "Gemini 3.5 Flash  (Google)":          "gemini-3.5-flash",
@@ -48,179 +45,150 @@ MODELS = {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# HELPERS
+# SESSION STATE MANAGEMENT
 # ═══════════════════════════════════════════════════════════════
-def render_markdown_bold(text: str) -> str:
-    """
-    Ensure **text** patterns always render as bold in st.markdown.
-    (st.markdown already handles this, but we sanitise stray single-star
-    patterns that could break rendering.)
-    """
-    return text
-
-
-def format_tool_call(name: str, args: str) -> str:
-    return f"🔧 **Tool called:** `{name}`\n```json\n{args}\n```"
-
-
-def format_tool_result(result) -> str:
-    import json
-    try:
-        pretty = json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception:
-        pretty = str(result)
-    return f"```json\n{pretty[:3000]}{'...' if len(pretty) > 3000 else ''}\n```"
-
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "current_response" not in st.session_state:
+    st.session_state.current_response = None
+if "captured_logs" not in st.session_state:
+    st.session_state.captured_logs = []
 
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR CONTROL PANEL
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.title("⚙️ Settings")
+    st.title("⚙️ Engine Control")
     st.markdown("---")
 
     selected_label = st.selectbox(
-        "🤖 Model",
+        "🤖 Processing Model",
         options=list(MODELS.keys()),
         index=0,
-        help="Choose the LLM that powers the agent.",
     )
     selected_model = MODELS[selected_label]
 
     st.markdown("---")
-    st.markdown("**🔍 Debug Options**")
+    st.markdown("**🔍 Debug View Filters**")
 
+    # Linked toggles that directly show/hide specific log frames live
     show_thinking = st.toggle(
         "Show tool calls",
-        value=False,
+        value=True,
         help="Display which search tool the agent called and with what arguments.",
     )
     show_tool_results = st.toggle(
         "Show tool results",
-        value=False,
+        value=True,
         help="Display the raw database records returned by each tool call.",
     )
 
     st.markdown("---")
-    if st.button("🗑️ Clear chat", use_container_width=True):
+    if st.button("🗑️ Clear Chat History", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.current_response = None
+        st.session_state.captured_logs = []
         st.rerun()
 
-    st.markdown("---")
-    st.caption(
-        "Searches a Zilliz/Milvus database of **1 949 devices** "
-        "(Laptops, Smartphones, Gaming Laptops, Ultrabooks, Feature Phones)."
-    )
+# ═══════════════════════════════════════════════════════════════
+# APPLICATION MONKEY-PATCH FOR UTILS DISPLAY INTERCEPTION
+# ═══════════════════════════════════════════════════════════════
+class HTMLCaptureObject:
+    def __init__(self, data_str):
+        self.data_str = data_str
+
+def streamlit_html_interceptor(obj):
+    """Intercepts IPython display calls and pipes HTML strings to session state."""
+    if hasattr(obj, 'data_str'):
+        st.session_state.captured_logs.append(obj.data_str)
+    elif isinstance(obj, str):
+        st.session_state.captured_logs.append(obj)
+
+# Force overwrite original utils functions to pipeline strings into active memory
+_utils.display = lambda x: streamlit_html_interceptor(x)
+_utils.HTML = lambda x: HTMLCaptureObject(x)
 
 # ═══════════════════════════════════════════════════════════════
-# SESSION STATE
+# MAIN INTERFACE WORKSPACE
 # ═══════════════════════════════════════════════════════════════
-if "messages" not in st.session_state:
-    st.session_state.messages = []   # list of {"role", "content", "extras"?}
-
-# ═══════════════════════════════════════════════════════════════
-# HEADER
-# ═══════════════════════════════════════════════════════════════
-st.title("💻📱 Laptop & Smartphone Recommender")
-st.markdown(
-    "Ask me to find a laptop or smartphone. I'll search the database and "
-    "explain why each recommendation fits your needs."
-)
+st.title("💻📱 Laptop & Smartphone Recommender Dashboard")
+st.markdown("Submit your hardware specifications requirement below to generate recommendations.")
 st.markdown("---")
 
-# ═══════════════════════════════════════════════════════════════
-# CHAT HISTORY
-# ═══════════════════════════════════════════════════════════════
+# Render past chat history in chat boxes
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-        # Show debug panels if they were recorded and toggles are on
-        if msg["role"] == "assistant" and "extras" in msg:
-            for extra in msg["extras"]:
-                if extra["type"] == "tool_call" and show_thinking:
-                    with st.expander("🔧 Tool call", expanded=False):
-                        st.markdown(format_tool_call(extra["name"], extra["args"]))
-                elif extra["type"] == "tool_result" and show_tool_results:
-                    with st.expander("📦 Tool result", expanded=False):
-                        st.markdown(format_tool_result(extra["result"]))
-
 # ═══════════════════════════════════════════════════════════════
-# MONKEY-PATCH utils so agent log calls stream into Streamlit
-# ═══════════════════════════════════════════════════════════════
-import utils as _utils  # noqa: E402
-
-_tool_call_log: list[dict] = []   # accumulates during one agent run
-
-_orig_log_tool_call  = _utils.log_tool_call_html
-_orig_log_tool_result = _utils.log_tool_result_html
-_orig_log_title       = _utils.log_agent_title_html
-_orig_log_summary     = _utils.log_final_summary_html
-
-
-def _st_log_tool_call(name, args, **kw):
-    _tool_call_log.append({"type": "tool_call", "name": name, "args": args})
-
-
-def _st_log_tool_result(result, **kw):
-    _tool_call_log.append({"type": "tool_result", "result": result})
-
-
-def _st_noop(*a, **kw):
-    pass
-
-
-_utils.log_tool_call_html   = _st_log_tool_call
-_utils.log_tool_result_html = _st_log_tool_result
-_utils.log_agent_title_html = _st_noop
-_utils.log_final_summary_html = _st_noop
-
-# ═══════════════════════════════════════════════════════════════
-# CHAT INPUT
+# CHAT INPUT PIPELINE EXECUTION BOUNDARY
 # ═══════════════════════════════════════════════════════════════
 if prompt := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with RTX 4060'"):
-
-    # Show user message immediately
+    
+    # Save the user query message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Reset internal tracking variables for a clean run
+    st.session_state.captured_logs = []
+    st.session_state.current_response = None
+    
+    # Render user prompt immediately to prevent interface hanging
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Run agent
+    # Trigger Agentic Loop Execution
     with st.chat_message("assistant"):
-        status_placeholder = st.empty()
-        status_placeholder.markdown("⏳ *Searching the database…*")
+        with st.spinner("⏳ *Searching the database and compiling recommendations...*"):
+            try:
+                # Core function execution
+                answer = agent.LS_research_agent(
+                    user_question=prompt,
+                    model=selected_model,
+                    verbose=True,
+                    show_thinking=True,       # Force agent logging internally
+                    show_tool_results=True,   # Force agent logging internally
+                    show=False,
+                )
+                st.session_state.current_response = answer
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+            except Exception as e:
+                error_msg = f"❌ **Execution Error encountered during runtime:** {e}"
+                st.session_state.current_response = error_msg
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    
+    st.rerun()
 
-        _tool_call_log.clear()
-
-        try:
-            answer = agent.LS_research_agent(
-                user_question=prompt,
-                model=selected_model,
-                verbose=True,
-                show_thinking=True,       # always capture; sidebar toggle controls display
-                show_tool_results=True,   # always capture; sidebar toggle controls display
-                show=False,
-            )
-        except Exception as e:
-            answer = f"❌ **Error:** {e}"
-
-        status_placeholder.empty()
-
-        # Render the final answer (st.markdown handles **bold** natively)
-        st.markdown(answer)
-
-        # Show debug expanders inline (respects sidebar toggles)
-        for extra in _tool_call_log:
-            if extra["type"] == "tool_call" and show_thinking:
-                with st.expander("🔧 Tool call", expanded=False):
-                    st.markdown(format_tool_call(extra["name"], extra["args"]))
-            elif extra["type"] == "tool_result" and show_tool_results:
-                with st.expander("📦 Tool result", expanded=False):
-                    st.markdown(format_tool_result(extra["result"]))
-
-    # Persist to session state (including debug extras for re-render)
-    st.session_state.messages.append({
-        "role":    "assistant",
-        "content": answer,
-        "extras":  list(_tool_call_log),
-    })
+# ═══════════════════════════════════════════════════════════════
+# OUTPUT TAB COMPONENT ROUTER
+# ═══════════════════════════════════════════════════════════════
+if st.session_state.current_response is not None:
+    st.markdown("---")
+    
+    # Build structural presentation tabs
+    home_tab, tools_tab = st.tabs(["🏠 Recommendation Home", "🛠️ Tool Call Records"])
+    
+    with home_tab:
+        st.subheader("💡 Expert Recommendations Summary")
+        st.markdown(st.session_state.current_response)
+        
+    with tools_tab:
+        st.subheader("📦 Under-the-Hood Agent System Logs")
+        
+        has_visible_logs = False
+        
+        if st.session_state.captured_logs:
+            for html_payload in st.session_state.captured_logs:
+                # Isolate log types based on custom string layout classes
+                is_call = "Tool Call" in html_payload
+                is_result = "Tool Result" in html_payload
+                
+                # Check current sidebar toggle state filter matrix live
+                if (is_call and show_thinking) or (is_result and show_tool_results):
+                    has_visible_logs = True
+                    with st.container():
+                        # Auto-scale box framing heights based on payload sizing requirements
+                        box_height = 450 if is_result else 180
+                        components.html(html_payload, height=box_height, scrolling=True)
+                        
+        if not has_visible_logs:
+            st.info("No tool call logs match your current sidebar display settings filter.")
