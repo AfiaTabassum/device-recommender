@@ -13,10 +13,23 @@ for key in ["ZILLIZ_URI", "ZILLIZ_TOKEN", "GROQ_API_KEY", "OPENROUTER_API_KEY", 
 
 import agent  # noqa: E402  (must come after env injection)
 
-# ── Re-trigger Milvus init now that credentials are in os.environ ──
+# ── Initialise Milvus once per server process (cached across all sessions) ──
 import laptop_SP_search_tools as _lst  # noqa: E402
-if not _lst._milvus_ok:
-    _lst._init_milvus()
+
+@st.cache_resource
+def _init_milvus_cached():
+    """
+    Runs exactly once per Streamlit server process, regardless of how many
+    users connect or how many times the page is refreshed.  The cache
+    persists until the server restarts (i.e. a new deploy or a manual
+    reboot), so the expensive BM25 model + Zilliz connection is never
+    re-initialised on a plain page refresh.
+    """
+    if not _lst._milvus_ok:
+        _lst._init_milvus()
+    return _lst._milvus_ok   # return value is cached; truthy = connected
+
+_init_milvus_cached()
 
 # ═══════════════════════════════════════════════════════════════
 # PAGE CONFIG
