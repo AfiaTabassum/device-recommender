@@ -124,23 +124,23 @@ _utils.display = lambda wrapper_obj: stream_interceptor_sink(wrapper_obj)
 _utils.HTML = lambda structural_str: HTMLCaptureFrame(structural_str)
 
 _utils.log_tool_call_html = lambda name, args: stream_interceptor_sink(
-    f\"\"\"
+    f"""
     <div class="theme-call-box" style="border-left: 4px solid #1976D2; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
         <strong>🔧 Tool Call Initiated:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{args}</pre>
     </div>
     {THEME_JS_PATCH}
-    \"\"\"
+    """
 )
 
 _utils.log_tool_result_html = lambda result: stream_interceptor_sink(
-    f\"\"\"
+    f"""
     <div class="theme-result-box" style="border-left: 4px solid #558B2F; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
         <strong>✅ Tool Execution Result:</strong>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{result}</pre>
     </div>
     {THEME_JS_PATCH}
-    \"\"\"
+    """
 )
 
 # ═══════════════════════════════════════════════════════════════
