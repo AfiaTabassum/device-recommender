@@ -118,6 +118,7 @@ def _call_groq_with_retry(
             is_tool_fail = (
                 "tool_use_failed" in err
                 or "Failed to call a function" in err
+                or err
             )
             is_last_attempt = attempt == max_retries
 
