@@ -1,7 +1,6 @@
 """
-app.py — Tabbed workflow engine interface.
-All visibility toggles are removed. Tool calls and results are always fully 
-rendered inside the secondary tab using themed CSS variables.
+app.py — Completely isolated execution interface.
+Removes all sidebar toggles. Tool records are forced into the secondary tab unconditionally.
 """
 
 import os
@@ -46,169 +45,174 @@ MODELS = {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# STATE RETENTION PERSISTENCE
+# CRITICAL STATE BOUNDARIES (Fixes the Empty Tool-Call Infinite Loop)
 # ═══════════════════════════════════════════════════════════════
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "current_response" not in st.session_state:
-    st.session_state.current_response = None
-if "captured_logs" not in st.session_state:
-    st.session_state.captured_logs = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "last_computed_answer" not in st.session_state:
+    st.session_state.last_computed_answer = None
+if "live_runtime_logs" not in st.session_state:
+    st.session_state.live_runtime_logs = []
 
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR CONTROL PANEL (No visibility toggles present)
+# SIDEBAR CONTROL PANEL (Cleaned, no toggle elements)
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.title("⚙️ Engine Architecture")
+    st.title("⚙️ Engine Parameters")
     st.markdown("---")
 
     selected_label = st.selectbox(
-        "🤖 Processing Intelligence Model",
+        "🤖 Processing Model Selection",
         options=list(MODELS.keys()),
         index=0,
     )
     selected_model = MODELS[selected_label]
 
     st.markdown("---")
-    if st.button("🗑️ Clear Cache & Logs", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.current_response = None
-        st.session_state.captured_logs = []
+    if st.button("🗑️ Reset Engine States", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.last_computed_answer = None
+        st.session_state.live_runtime_logs = []
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# STATIC DELEGATED INTERCEPTION CHANNELS (THEMED)
+# DYNAMIC ACCENT THEME PATCH FOR OVERRIDDEN LOGS
 # ═══════════════════════════════════════════════════════════════
-class HTMLCaptureFrame:
-    def __init__(self, raw_html_string):
-        self.raw_html_string = raw_html_string
+class CapturedHTMLWrapper:
+    def __init__(self, raw_html):
+        self.raw_html = raw_html
 
-def stream_interceptor_sink(target_object):
-    """Intercepts utility HTML payloads and routes them sequentially into global state storage."""
-    if hasattr(target_object, 'raw_html_string'):
-        st.session_state.captured_logs.append(target_object.raw_html_string)
-    elif isinstance(target_object, str):
-        st.session_state.captured_logs.append(target_object)
+def pipe_html_to_state_sink(html_payload):
+    """Safely extracts HTML structures and appends them to clean storage frameworks."""
+    if hasattr(html_payload, 'raw_html'):
+        st.session_state.live_runtime_logs.append(html_payload.raw_html)
+    elif isinstance(html_payload, str):
+        st.session_state.live_runtime_logs.append(html_payload)
 
-THEME_JS_PATCH = """
+THEME_MUTATION_JS = """
 <script>
-    function matchParentTheme() {
-        const parentStyles = window.parent.getComputedStyle(window.parent.document.body);
-        const textColor = parentStyles.getPropertyValue('--text-color') || '#111111';
-        const bgColor = parentStyles.getPropertyValue('--background-color') || '#ffffff';
-        const secondaryBg = parentStyles.getPropertyValue('--secondary-background-color') || '#f4f4f4';
+    function parseDashboardTheme() {
+        const dashboardBody = window.parent.getComputedStyle(window.parent.document.body);
+        const fontColor = dashboardBody.getPropertyValue('--text-color') || '#111111';
+        const canvasBg = dashboardBody.getPropertyValue('--background-color') || '#ffffff';
+        const secondaryCardBg = dashboardBody.getPropertyValue('--secondary-background-color') || '#f8f9fa';
 
-        document.body.style.color = textColor;
-        document.body.style.backgroundColor = 'transparent'; 
+        document.body.style.color = fontColor;
+        document.body.style.backgroundColor = 'transparent';
         
-        const callBox = document.querySelector('.theme-call-box');
-        if (callBox) { callBox.style.backgroundColor = secondaryBg; callBox.style.color = textColor; }
-        
-        const resultBox = document.querySelector('.theme-result-box');
-        if (resultBox) { resultBox.style.backgroundColor = secondaryBg; resultBox.style.color = textColor; }
+        const targetBlocks = document.querySelectorAll('.theme-card-node');
+        targetBlocks.forEach(box => {
+            box.style.backgroundColor = secondaryCardBg;
+            box.style.color = fontColor;
+        });
 
-        const preBlocks = document.querySelectorAll('pre, code');
-        preBlocks.forEach(el => {
-            el.style.background = bgColor;
-            el.style.color = textColor;
-            el.style.border = `1px solid ${secondaryBg}`;
+        const codeNodes = document.querySelectorAll('pre, code');
+        codeNodes.forEach(node => {
+            node.style.background = canvasBg;
+            node.style.color = fontColor;
+            node.style.border = `1px solid ${secondaryCardBg}`;
         });
     }
-    window.addEventListener('DOMContentLoaded', matchParentTheme);
-    setInterval(matchParentTheme, 1000);
+    window.addEventListener('DOMContentLoaded', parseDashboardTheme);
+    setInterval(parseDashboardTheme, 1000);
 </script>
 """
 
-# Force overwrite original utils functions to pipeline strings into active memory
-_utils.display = lambda wrapper_obj: stream_interceptor_sink(wrapper_obj)
-_utils.HTML = lambda structural_str: HTMLCaptureFrame(structural_str)
+# Force mock IPython hooks natively prior to agent loop triggering
+_utils.display = lambda payload_obj: pipe_html_to_state_sink(payload_obj)
+_utils.HTML = lambda base_string: CapturedHTMLWrapper(base_string)
 
-_utils.log_tool_call_html = lambda name, args: stream_interceptor_sink(
-    f"""
-    <div class="theme-call-box" style="border-left: 4px solid #1976D2; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
-        <strong>🔧 Tool Call Initiated:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
+_utils.log_tool_call_html = lambda name, args: pipe_html_to_state_sink(
+    f\"\"\"
+    <div class="theme-card-node" style="border-left: 4px solid #1976D2; padding: .9em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
+        <strong>🔧 Tool Call Dispatched:</strong> <code style="padding: 2px 6px; border-radius: 4px;">{name}</code>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{args}</pre>
     </div>
-    {THEME_JS_PATCH}
-    """
+    {THEME_MUTATION_JS}
+    \"\"\"
 )
 
-_utils.log_tool_result_html = lambda result: stream_interceptor_sink(
-    f"""
-    <div class="theme-result-box" style="border-left: 4px solid #558B2F; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
-        <strong>✅ Tool Execution Result:</strong>
+_utils.log_tool_result_html = lambda result: pipe_html_to_state_sink(
+    f\"\"\"
+    <div class="theme-card-node" style="border-left: 4px solid #558B2F; padding: .8em; margin: 1em 0; font-family: sans-serif; border-radius: 0 8px 8px 0;">
+        <strong>✅ Vector Database Payload Returned:</strong>
         <pre style="padding: 8px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; overflow-x: auto;">{result}</pre>
     </div>
-    {THEME_JS_PATCH}
-    """
+    {THEME_MUTATION_JS}
+    \"\"\"
 )
 
 # ═══════════════════════════════════════════════════════════════
-# DASHBOARD INPUT INTERFACE
+# DASHBOARD INTERFACE CONTAINER
 # ═══════════════════════════════════════════════════════════════
 st.title("💻📱 Laptop & Smartphone Recommender")
-st.markdown("Input your technical deployment specifications below to compile tailored hardware reports.")
+st.markdown("Provide your requirements details below to activate vector similarity matching runs.")
 st.markdown("---")
 
-# Render historical messaging chains
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# Display persistent messaging arrays
+for chat_bubble in st.session_state.chat_history:
+    with st.chat_message(chat_bubble["role"]):
+        st.markdown(chat_bubble["content"])
 
 # ═══════════════════════════════════════════════════════════════
-# AGENT INTERACTIVE RUN BOUNDARY
+# HARD BOUNDARY: CLEAN ISOLATED AGENT TRIGGER LOOP
 # ═══════════════════════════════════════════════════════════════
-if prompt := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with RTX 4060'"):
+if active_query := st.chat_input("e.g. 'Best gaming laptop under 120000 BDT with RTX 4060'"):
     
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.session_state.captured_logs = []
-    st.session_state.current_response = None
+    # Store immediate user action
+    st.session_state.chat_history.append({"role": "user", "content": active_query})
+    
+    # HARD RESET: Flush internal tracking states to guarantee a clean runtime frame
+    st.session_state.live_runtime_logs = []
+    st.session_state.last_computed_answer = None
     
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(active_query)
 
     with st.chat_message("assistant"):
-        with st.spinner("⏳ *Executing multi-turn agent pipeline and vector table search...*"):
+        with st.spinner("⏳ *Executing isolated multi-turn agent logic blocks...*"):
             try:
-                # Fire core agent logic loop directly
-                answer = agent.LS_research_agent(
-                    user_question=prompt,
-                    model=selected_model,
+                # Force clean context parameter separation to pass to agent.py
+                evaluated_payload = agent.LS_research_agent(
+                    user_question=str(active_query),  # Cast explicitly to isolate string space
+                    model=str(selected_model),
                     verbose=True,
                     show_thinking=True,       
                     show_tool_results=True,   
                     show=False,
                 )
-                st.session_state.current_response = answer
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            except Exception as execution_failure:
-                err_text = f"❌ **Pipeline Execution Failure:** {execution_failure}"
-                st.session_state.current_response = err_text
-                st.session_state.messages.append({"role": "assistant", "content": err_text})
+                st.session_state.last_computed_answer = evaluated_payload
+                st.session_state.chat_history.append({"role": "assistant", "content": evaluated_payload})
+            except Exception as processing_fault:
+                fault_error_string = f"❌ **Pipeline Loop Exception:** {processing_fault}"
+                st.session_state.last_computed_answer = fault_error_string
+                st.session_state.chat_history.append({"role": "assistant", "content": fault_error_string})
                 
     st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# PERSISTENT TABS DISPATCH MATRICES
+# ALWAYS-ON STRUCTURAL VIEW TAB DISPATCH
 # ═══════════════════════════════════════════════════════════════
-if st.session_state.current_response is not None:
+if st.session_state.last_computed_answer is not None:
     st.markdown("---")
     
-    # Structural layout separation matching your parameters
+    # Split structural rendering tabs cleanly
     home_tab, tools_tab = st.tabs(["🏠 Recommendation Home", "🛠️ Tool Call Records"])
     
     with home_tab:
         st.subheader("💡 System Evaluation Output")
-        st.markdown(st.session_state.current_response)
+        st.markdown(st.session_state.last_computed_answer)
         
     with tools_tab:
         st.subheader("📦 Database Query Execution Logs")
         
-        if st.session_state.captured_logs:
-            for html_payload in st.session_state.captured_logs:
-                is_large_result = "Tool Execution Result" in html_payload
+        if st.session_state.live_runtime_logs:
+            # Sequentially loop and print logs directly to the frame without conditional toggle limits
+            for explicit_html in st.session_state.live_runtime_logs:
+                is_database_row_payload = "Database Payload Returned" in explicit_html
                 with st.container():
-                    frame_height = 500 if is_large_result else 200
-                    components.html(html_payload, height=frame_height, scrolling=True)
+                    # Safely dynamically size micro-frame container constraints
+                    calculated_height = 550 if is_database_row_payload else 220
+                    components.html(explicit_html, height=calculated_height, scrolling=True)
         else:
-            st.info("No underlying vector tool transactions were captured for this instruction block.")
+            st.info("No tool call logs were captured during this transaction.")
